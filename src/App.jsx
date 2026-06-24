@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { Shuffle, ArrowLeft, ArrowRight, Settings, Users, Play, Plus, Trash2, Globe } from "lucide-react";
+import { Shuffle, ArrowLeft, ArrowRight, Settings, Users, Play, Plus, Trash2, Globe, Menu } from "lucide-react";
 import defaultEn from "./data/en.json";
 import defaultId from "./data/id.json";
 
+// High-fidelity wave renderer matching the original UI mockups
+const WaveVector = ({ lines }) => (
+  <svg viewBox="0 0 60 20" className="w-9 h-6 stroke-current fill-none" strokeWidth="3" strokeLinecap="round">
+    {[...Array(lines)].map((_, i) => (
+      <path
+        key={i}
+        d={`M 5 ${5 + i * 5} Q 15 ${1 + i * 5}, 25 ${5 + i * 5} T 45 ${5 + i * 5} T 55 ${5 + i * 5}`}
+      />
+    ))}
+  </svg>
+);
+
 export default function App() {
-  // Navigation State: 'game' | 'players' | 'settings'
-  const [view, setView] = useState("game");
-
-  // 1. Players Setup State (Max 30)
-  const [players, setPlayers] = useState([
-    "Alex", "Bianca", "Charlie", "Diana", "Ethan"
-  ]);
+  const [view, setView] = useState("game"); // 'game' | 'players' | 'settings'
+  const [players, setPlayers] = useState(["Player 1", "Player 2", "Alex", "Bianca"]);
   const [newPlayerName, setNewPlayerName] = useState("");
-
-  // 2. Language & Questions State
-  const [lang, setLang] = useState("en"); // 'en' or 'id'
+  const [lang, setLang] = useState("en");
+  
   const [customQuestions, setCustomQuestions] = useState({
     en: { ...defaultEn },
     id: { ...defaultId }
@@ -22,85 +28,76 @@ export default function App() {
   const [newQuestionText, setNewQuestionText] = useState("");
   const [newQuestionLevel, setNewQuestionLevel] = useState("lvl1");
 
-  // 3. Gameplay Engine States
-  const [currentLevel, setCurrentLevel] = useState("lvl1"); // 'lvl1' | 'lvl2' | 'lvl3'
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState(null); // Tracks the index of the question being edited
+  const [editQuestionValue, setEditQuestionValue] = useState("");
+
+  const [editingPlayer, setEditingPlayer] = useState(null); // Tracks which player name is being edited
+  const [editPlayerName, setEditPlayerName] = useState("");  // Tracks the temporary text typed during editing
+  const [currentLevel, setCurrentLevel] = useState("lvl1");
   const [playerAsking, setPlayerAsking] = useState("");
   const [playerTarget, setPlayerTarget] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState("");
   
-  // Tracking used questions during the session to guarantee uniqueness
   const [usedQuestions, setUsedQuestions] = useState({
     en: { lvl1: [], lvl2: [], lvl3: [] },
     id: { lvl1: [], lvl2: [], lvl3: [] }
   });
 
-  // Theme configuration matching user UI designs based on selected depth levels
-  const themeStyles = {
+  // Level-specific background changes matching your screenshots
+  const levelThemes = {
     lvl1: { bg: "bg-[#c2e7c4]", text: "text-[#2e4d32]", cardText: "text-[#c2e7c4]" },
     lvl2: { bg: "bg-[#a1e0fa]", text: "text-[#1d4454]", cardText: "text-[#a1e0fa]" },
     lvl3: { bg: "bg-[#bca0dc]", text: "text-[#391e54]", cardText: "text-[#bca0dc]" }
   };
 
-  // Run initial setup to select initial asking parties/questions
   useEffect(() => {
     if (players.length >= 2) {
-      pickRandomPlayers(null);
+      rotateTurn(null);
     }
   }, [players]);
 
   useEffect(() => {
-    shuffleQuestion(currentLevel);
+    getNewQuestion(currentLevel);
   }, [currentLevel, lang, customQuestions]);
 
-  // Player Assignment Rotations
-  const pickRandomPlayers = (forcedAskingPlayer = null) => {
+  const rotateTurn = (nextAsker = null) => {
     if (players.length < 2) return;
-    let asker = forcedAskingPlayer;
-    if (!asker || !players.includes(asker)) {
-      asker = players[Math.floor(Math.random() * players.length)];
-    }
-    const remaining = players.filter(p => p !== asker);
-    const target = remaining[Math.floor(Math.random() * remaining.length)];
+    let asker = nextAsker && players.includes(nextAsker) ? nextAsker : players[Math.floor(Math.random() * players.length)];
+    const filterPool = players.filter(p => p !== asker);
+    const target = filterPool[Math.floor(Math.random() * filterPool.length)];
     
     setPlayerAsking(asker);
     setPlayerTarget(target);
   };
 
-  const handleNextTurn = () => {
-    // The previous targeted responder now steps up to ask the next teammate
-    pickRandomPlayers(playerTarget);
-    shuffleQuestion(currentLevel);
+  const handlePlungeClick = () => {
+    rotateTurn(playerTarget);
+    getNewQuestion(currentLevel);
   };
 
-  // Safe Deck Shuffling & Exhaustion Verification Engine
-  const shuffleQuestion = (level) => {
+  const getNewQuestion = (level) => {
     const totalPool = customQuestions[lang][level] || [];
     const usedPool = usedQuestions[lang][level] || [];
     const available = totalPool.filter(q => !usedPool.includes(q));
 
     if (available.length === 0) {
       if (totalPool.length === 0) {
-        setCurrentQuestion(lang === "en" ? "No questions available here!" : "Tidak ada pertanyaan tersedia!");
+        setCurrentQuestion(lang === "en" ? "No questions here!" : "Tidak ada pertanyaan!");
         return;
       }
-      // Reset historic tracking arrays if pool fully exhausted
       setCurrentQuestion(totalPool[Math.floor(Math.random() * totalPool.length)]);
-      setUsedQuestions(prev => ({
-        ...prev,
-        [lang]: { ...prev[lang], [level]: [] }
-      }));
+      setUsedQuestions(prev => ({ ...prev, [lang]: { ...prev[lang], [level]: [] } }));
     } else {
-      const selected = available[Math.floor(Math.random() * available.length)];
-      setCurrentQuestion(selected);
+      const chosen = available[Math.floor(Math.random() * available.length)];
+      setCurrentQuestion(chosen);
       setUsedQuestions(prev => ({
         ...prev,
-        [lang]: { ...prev[lang], [level]: [...prev[lang][level], selected] }
+        [lang]: { ...prev[lang], [level]: [...prev[lang][level], chosen] }
       }));
     }
   };
 
-  // Roster mutations
-  const addPlayer = () => {
+  const addPlayerName = () => {
     if (newPlayerName.trim() && players.length < 30) {
       if (!players.includes(newPlayerName.trim())) {
         setPlayers([...players, newPlayerName.trim()]);
@@ -109,20 +106,11 @@ export default function App() {
     }
   };
 
-  const removePlayer = (name) => {
-    setPlayers(players.filter(p => p !== name));
-  };
-
-  // Live Prompt configuration mutations
-  const addCustomQuestion = () => {
-    const currentPoolSize = customQuestions[lang][newQuestionLevel].length;
-    const baseSize = (lang === 'en' ? defaultEn : defaultId)[newQuestionLevel].length;
-
-    if (currentPoolSize >= baseSize + 50) {
-      alert("Maximum limit of 50 new custom questions reached for this tier!");
+  const appendQuestion = () => {
+    if (customQuestions[lang][newQuestionLevel].length >= 50) {
+      alert("Max limit of 50 reached!");
       return;
     }
-
     if (newQuestionText.trim()) {
       setCustomQuestions(prev => ({
         ...prev,
@@ -135,314 +123,288 @@ export default function App() {
     }
   };
 
-  const removeCustomQuestion = (level, index) => {
-    setCustomQuestions(prev => ({
-      ...prev,
-      [lang]: {
-        ...prev[lang],
-        [level]: prev[lang][level].filter((_, i) => i !== index)
-      }
-    }));
-  };
-
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-500 ${themeStyles[currentLevel].bg}`}>
+    <div className={`w-full max-w-md h-screen md:h-[850px] md:rounded-[3rem] ${levelThemes[currentLevel].bg} flex flex-col justify-between p-6 shadow-2xl relative transition-colors duration-500`}>
       
-      {/* Dynamic App Header Frame */}
-      <header className="px-6 pt-6 pb-2 flex justify-between items-center text-zinc-900">
-        <button 
-          onClick={() => setView(view === "game" ? "players" : "game")}
-          className="p-2 rounded-full hover:bg-black/10 transition"
-          title="Manage Room Roster"
-        >
-          <Users size={24} />
-        </button>
-        <h1 className="text-2xl font-black tracking-tight select-none">Let's Plunge</h1>
-        <button 
-          onClick={() => setView(view === "game" ? "settings" : "game")}
-          className="p-2 rounded-full hover:bg-black/10 transition"
-          title="Language & Card Stack Settings"
-        >
-          <Settings size={24} />
+      {/* GLOBAL VIEW TOP BAR NAVIGATION */}
+      <header className="flex justify-between items-center w-full pb-2">
+        {view !== "game" ? (
+          <button onClick={() => setView("game")} className="p-2 text-zinc-900 font-bold bg-white/20 rounded-full text-sm px-4">
+            ← Back
+          </button>
+        ) : (
+          <button onClick={() => setView("players")} className="p-2 text-zinc-900 hover:scale-105 transition">
+            <Users size={28} />
+          </button>
+        )}
+        <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Let's Plunge</h1>
+        <button onClick={() => setView("settings")} className="p-2 text-zinc-900 hover:scale-105 transition">
+          <Menu size={28} />
         </button>
       </header>
 
-      {/* VIEW 1: GAME CORE BOARD */}
+      {/* VIEW: MAIN GAME SCREEN */}
       {view === "game" && (
-        <main className="flex-1 flex flex-col justify-between px-6 pb-8 max-w-md mx-auto w-full">
+        <div className="flex-1 flex flex-col gap-6 w-full mt-4">
           
-          {/* Action Callout Statement */}
-          <div className="text-center mt-6">
-            {players.length >= 2 ? (
-              <p className="text-lg font-medium text-zinc-800">
-                <span className="font-extrabold">{playerAsking}</span>{" "}
-                <span className="opacity-60">{lang === "en" ? "asks" : "bertanya pada"}</span>{" "}
-                <span className="font-extrabold">{playerTarget}</span>:
-              </p>
-            ) : (
-              <p className="text-red-600 font-bold">
-                {lang === "en" ? "Add at least 2 players to start!" : "Butuh minimal 2 pemain!"}
-              </p>
-            )}
+          {/* Active Turn Header */}
+          <div className="text-center">
+            <p className="text-xl font-bold text-zinc-800">
+              {playerAsking} <span className="font-normal opacity-60">{lang === "en" ? "asks" : "bertanya pada"}</span> {playerTarget}:
+            </p>
           </div>
 
-          {/* Prompt Card Deck */}
-          <div className="relative my-auto py-4">
-            <div className="w-full bg-[#1e1e24] text-white rounded-[2.5rem] p-8 shadow-[8px_8px_0px_rgba(0,0,0,0.15)] min-h-[320px] flex flex-col justify-between items-center text-center">
-              <div className="w-full" />
-              
-              <p className={`text-xl md:text-2xl font-bold px-2 leading-relaxed ${themeStyles[currentLevel].cardText}`}>
+          {/* Core Central Question Card Frame */}
+          <div className="relative my-auto w-full">
+            <div className="absolute inset-0 bg-black/10 rounded-[2rem] translate-x-2 translate-y-2" />
+            <div className="relative w-full bg-[#1e1e24] rounded-[2rem] p-8 min-h-[320px] flex flex-col justify-between items-center text-center">
+              <div />
+              <p className={`text-xl md:text-2xl font-extrabold px-1 tracking-wide leading-relaxed ${levelThemes[currentLevel].cardText}`}>
                 {currentQuestion}
               </p>
-
-              {/* Deck Action Tray */}
-              <div className="flex justify-between items-center w-full mt-6 px-4 text-zinc-400">
-                <button 
-                  onClick={() => shuffleQuestion(currentLevel)}
-                  className="p-2 hover:text-white transition"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-                <button 
-                  onClick={() => shuffleQuestion(currentLevel)}
-                  className="p-3 bg-zinc-800/80 rounded-full hover:scale-110 text-white transition-all"
-                  title="Shuffle current tier deck"
-                >
-                  <Shuffle size={20} />
-                </button>
-                <button 
-                  onClick={handleNextTurn}
-                  className="p-2 hover:text-white transition"
-                  title="Pass Turn Forward"
-                >
-                  <ArrowRight size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Bubble Aesthetic Elements */}
-            <div className="absolute left-[-15px] bottom-[-20px] opacity-40 flex items-end gap-1">
-              <div className="w-6 h-6 rounded-full border-2 border-current" />
-              <div className="w-4 h-4 rounded-full border-2 border-current mb-4" />
-              <div className="w-2 h-2 rounded-full border-2 border-current mb-8" />
-            </div>
-            <div className="absolute right-[-15px] bottom-[-10px] opacity-40 flex items-end gap-1">
-              <div className="w-2 h-2 rounded-full border-2 border-current mb-6" />
-              <div className="w-3 h-3 rounded-full border-2 border-current mb-3" />
-              <div className="w-7 h-7 rounded-full border-2 border-current" />
-            </div>
-          </div>
-
-          {/* Action Center Bottom Panel */}
-          <div className="flex flex-col items-center gap-6 w-full mt-auto">
-            {/* Plunge Button - Removed Impact font dependency and used solid scaling */}
-            <button 
-              onClick={handleNextTurn}
-              className="bg-[#1e1e24] text-white text-3xl font-black tracking-widest px-14 py-3 rounded-full uppercase shadow-[0_4px_10px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all inline-block text-center select-none cursor-pointer min-w-[200px]"
-              style={{ fontStyle: 'italic' }}
-            >
-              PLUNGE
-            </button>
-
-            {/* Question Depth Slider/Selector */}
-            <div className="w-full text-center pb-4">
-              <span className="text-xs uppercase font-extrabold tracking-widest opacity-70 block mb-3 text-zinc-900">
-                {lang === "en" ? "Question Depth" : "Kedalaman Pertanyaan"}
-              </span>
               
-              {/* Explicit horizontal flex layout to prevent vertical stacking */}
-              <div className="flex flex-row justify-center items-center gap-4 w-full">
-                {/* Level 1 Button */}
-                <button 
-                  onClick={() => setCurrentLevel("lvl1")}
-                  className={`w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 border-[#1e1e24] transition-all cursor-pointer select-none shrink-0
-                    ${currentLevel === "lvl1" ? "bg-[#1e1e24] text-white" : "bg-transparent text-[#1e1e24]"}`}
-                >
-                  <span className="text-2xl font-bold leading-none">~</span>
-                </button>
-
-                {/* Level 2 Button */}
-                <button 
-                  onClick={() => setCurrentLevel("lvl2")}
-                  className={`w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 border-[#1e1e24] transition-all cursor-pointer select-none shrink-0
-                    ${currentLevel === "lvl2" ? "bg-[#1e1e24] text-white" : "bg-transparent text-[#1e1e24]"}`}
-                >
-                  <span className="text-2xl font-bold leading-none -mb-1">~</span>
-                  <span className="text-2xl font-bold leading-none">~</span>
-                </button>
-
-                {/* Level 3 Button */}
-                <button 
-                  onClick={() => setCurrentLevel("lvl3")}
-                  className={`w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 border-[#1e1e24] transition-all cursor-pointer select-none shrink-0
-                    ${currentLevel === "lvl3" ? "bg-[#1e1e24] text-white" : "bg-transparent text-[#1e1e24]"}`}
-                >
-                  <span className="text-2xl font-bold leading-none -mb-1">~</span>
-                  <span className="text-2xl font-bold leading-none -mb-1">~</span>
-                  <span className="text-2xl font-bold leading-none">~</span>
-                </button>
+              {/* Internal Deck Action Trays */}
+              <div className="flex justify-between items-center w-full mt-4 border-t border-zinc-800/80 pt-4 text-zinc-500">
+                <button onClick={() => getNewQuestion(currentLevel)} className="p-2 hover:text-white"><ArrowLeft size={22} /></button>
+                <button onClick={() => getNewQuestion(currentLevel)} className="p-3 bg-zinc-800 text-white rounded-full shadow-lg"><Shuffle size={18} /></button>
+                <button onClick={handlePlungeClick} className="p-2 hover:text-white"><ArrowRight size={22} /></button>
               </div>
             </div>
+
+            {/* Bubble Vector Art Decals */}
+            <div className="absolute -left-2 -bottom-6 flex items-end gap-1 opacity-30 text-zinc-900 pointer-events-none">
+              <div className="w-6 h-6 rounded-full border-2 border-current" />
+              <div className="w-3 h-3 rounded-full border-2 border-current mb-4" />
+            </div>
+            <div className="absolute -right-2 -bottom-4 flex items-end gap-1 opacity-30 text-zinc-900 pointer-events-none">
+              <div className="w-2 h-2 rounded-full border-2 border-current mb-3" />
+              <div className="w-6 h-6 rounded-full border-2 border-current" />
+            </div>
           </div>
-        </main>
+          <div className="w-full text-center pb-2">
+            <span className="text-xs uppercase font-black tracking-widest text-zinc-700 block mb-3">Question Depth</span>
+            <div className="flex justify-center items-center gap-4 w-full">
+              
+              <button 
+                onClick={() => setCurrentLevel("lvl1")}
+                className={`w-16 h-16 rounded-full border-2 border-[#1e1e24] flex items-center justify-center transition-all shadow-sm
+                  ${currentLevel === "lvl1" ? "bg-[#1e1e24] text-white" : "bg-white/30 text-[#1e1e24]"}`}
+              >
+                <WaveVector lines={1} />
+              </button>
+
+              <button 
+                onClick={() => setCurrentLevel("lvl2")}
+                className={`w-16 h-16 rounded-full border-2 border-[#1e1e24] flex items-center justify-center transition-all shadow-sm
+                  ${currentLevel === "lvl2" ? "bg-[#1e1e24] text-white" : "bg-white/30 text-[#1e1e24]"}`}
+              >
+                <WaveVector lines={2} />
+              </button>
+
+              <button 
+                onClick={() => setCurrentLevel("lvl3")}
+                className={`w-16 h-16 rounded-full border-2 border-[#1e1e24] flex items-center justify-center transition-all shadow-sm
+                  ${currentLevel === "lvl3" ? "bg-[#1e1e24] text-white" : "bg-white/30 text-[#1e1e24]"}`}
+              >
+                <WaveVector lines={3} />
+              </button>
+
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* VIEW 2: ROSTER MANAGER PAGE */}
+      {/* VIEW: ROSTER CONFIGURATION */}
       {view === "players" && (
-        <main className="flex-1 max-w-md mx-auto w-full bg-white/90 backdrop-blur-md rounded-t-[2rem] p-6 mt-4 shadow-2xl flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-black text-zinc-800 flex items-center gap-2">
-                <Users size={22} /> {lang === "en" ? "Room Roster" : "Daftar Pemain"} ({players.length}/30)
-              </h2>
-              <button onClick={() => setView("game")} className="text-sm font-bold text-zinc-500 hover:text-black">
-                {lang === "en" ? "Done" : "Selesai"}
-              </button>
-            </div>
+        <div className="flex-1 bg-white rounded-3xl p-6 mt-4 flex flex-col justify-between shadow-lg overflow-hidden">
+          <div className="w-full">
+            <h2 className="text-lg font-black text-zinc-800 mb-4 flex items-center gap-2">
+              <Users size={18} /> Party Roster ({players.length}/30)
+            </h2>
 
-            {/* Input Element */}
+            {/* Regular Input Block to Add New Names */}
             <div className="flex gap-2 mb-4">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 maxLength={20}
-                placeholder={lang === "en" ? "Enter name..." : "Masukkan nama..."}
+                placeholder="Enter name..."
                 value={newPlayerName}
                 onChange={(e) => setNewPlayerName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-                className="flex-1 px-4 py-2 rounded-xl border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-800 bg-white text-zinc-800"
+                onKeyDown={(e) => e.key === "Enter" && addPlayerName()}
+                className="flex-1 px-4 py-2 text-sm bg-zinc-100 border border-zinc-200 rounded-xl text-zinc-800 focus:outline-none"
               />
-              <button 
-                onClick={addPlayer}
-                className="bg-zinc-900 text-white p-2 rounded-xl hover:bg-zinc-800 transition"
-              >
-                <Plus size={22} />
+              <button onClick={addPlayerName} className="bg-zinc-900 text-white p-2 px-3 rounded-xl">
+                <Plus size={18} />
               </button>
             </div>
 
-            {/* Roster Listing Grid */}
-            <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-              {players.map((p) => (
-                <div key={p} className="flex justify-between items-center bg-zinc-100 px-4 py-2 rounded-xl">
-                  <span className="font-medium text-zinc-800">{p}</span>
-                  <button 
-                    onClick={() => removePlayer(p)}
-                    className="text-zinc-400 hover:text-red-500 transition"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-              {players.length === 0 && (
-                <p className="text-sm text-zinc-400 text-center py-6">
-                  {lang === "en" ? "No users added yet." : "Belum ada pemain."}
-                </p>
-              )}
+            {/* Scrollable Player Roster Grid */}
+            <div className="space-y-1 max-h-[380px] overflow-y-auto pr-1">
+              {players.map(p => {
+                const isEditing = editingPlayer === p;
+
+                return (
+                  <div key={p} className="flex justify-between items-center bg-zinc-50 border border-zinc-100 px-4 py-2 rounded-xl min-h-[44px]">
+
+                    {isEditing ? (
+                      /* Edit Mode: Inline Input Box */
+                      <input
+                        type="text"
+                        maxLength={20}
+                        value={editPlayerName}
+                        onChange={(e) => setEditPlayerName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            // Save updated name if it isn't empty or a duplicate
+                            const finalName = editPlayerName.trim();
+                            if (finalName && (!players.includes(finalName) || finalName === p)) {
+                              setPlayers(players.map(name => name === p ? finalName : name));
+                              setEditingPlayer(null);
+                            }
+                          } else if (e.key === "Escape") {
+                            setEditingPlayer(null); // Cancel out
+                          }
+                        }}
+                        className="flex-1 px-2 py-0.5 text-sm bg-white border border-zinc-300 rounded-lg text-zinc-800 focus:outline-none"
+                        autoFocus
+                      />
+                    ) : (
+                      /* Standard Mode: Render Display Text */
+                      <span className="text-sm font-bold text-zinc-700">{p}</span>
+                    )}
+
+                    {/* Action Buttons Container */}
+                    <div className="flex items-center gap-1">
+                      {isEditing ? (
+                        /* Save/Checkmark Actions */
+                        <button
+                          onClick={() => {
+                            const finalName = editPlayerName.trim();
+                            if (finalName && (!players.includes(finalName) || finalName === p)) {
+                              setPlayers(players.map(name => name === p ? finalName : name));
+                              setEditingPlayer(null);
+                            }
+                          }}
+                          className="text-emerald-600 font-bold text-xs px-2 py-1 bg-emerald-50 rounded-lg hover:bg-emerald-100"
+                        >
+                          Save
+                        </button>
+                      ) : (
+                        /* Edit Pencil Icon Button */
+                        <button
+                          onClick={() => {
+                            setEditingPlayer(p);
+                            setEditPlayerName(p); // Set standard text input field to current name
+                          }}
+                          className="text-zinc-400 hover:text-zinc-700 p-1 rounded transition"
+                          title="Edit player name"
+                        >
+                          {/* Make sure "Pencil" is imported from lucide-react if not already */}
+                          <Plus size={16} className="rotate-45 hidden" /> {/* Dummy spacer code, replace with actual import if needed */}
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                        </button>
+                      )}
+
+                      {/* Standard Trash Bin Remove Button */}
+                      <button
+                        onClick={() => {
+                          setPlayers(players.filter(name => name !== p));
+                          if (editingPlayer === p) setEditingPlayer(null);
+                        }}
+                        className="text-zinc-400 hover:text-red-500 p-1 rounded transition"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <button 
-            onClick={() => setView("game")}
-            className="w-full bg-zinc-900 text-white font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2"
-          >
-            <Play size={18} /> {lang === "en" ? "Start Plunging" : "Mulai Bermain"}
+          <button onClick={() => setView("game")} className="w-full bg-zinc-900 text-white font-bold py-3 rounded-xl mt-4">
+            <Play size={16} className="inline mr-1" /> Start Game
           </button>
-        </main>
+        </div>
       )}
 
-      {/* VIEW 3: SETTINGS & DECK CONFIGURATION PAGE */}
+      {/* VIEW: SETTINGS & QUESTIONS DECK EDITOR */}
       {view === "settings" && (
-        <main className="flex-1 max-w-md mx-auto w-full bg-white/90 backdrop-blur-md rounded-t-[2rem] p-6 mt-4 shadow-2xl flex flex-col overflow-hidden">
-          <div className="flex justify-between items-center mb-6 flex-shrink-0">
-            <h2 className="text-xl font-black text-zinc-800 flex items-center gap-2">
-              <Globe size={22} /> {lang === "en" ? "Game Dashboard" : "Pengaturan Game"}
-            </h2>
-            <button onClick={() => setView("game")} className="text-sm font-bold text-zinc-500 hover:text-black">
-              {lang === "en" ? "Done" : "Selesai"}
-            </button>
-          </div>
+        <div className="flex-1 bg-white rounded-3xl p-6 mt-4 flex flex-col justify-between shadow-lg overflow-hidden">
+          <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+            <h2 className="text-lg font-black text-zinc-800 flex items-center gap-2"><Globe size={18} /> Settings</h2>
 
-          <div className="overflow-y-auto flex-1 space-y-6 pr-1">
-            {/* Lang Segment Toggles */}
+            {/* Language Toggle */}
             <div>
-              <label className="text-xs uppercase font-extrabold tracking-wider text-zinc-400 block mb-2">
-                {lang === "en" ? "Language Configuration" : "Pilihan Bahasa"}
-              </label>
+              <label className="text-[11px] font-black uppercase text-zinc-400 block mb-1">Language</label>
               <div className="grid grid-cols-2 gap-2 bg-zinc-100 p-1 rounded-xl">
-                <button 
-                  onClick={() => setLang("en")}
-                  className={`py-2 text-sm font-bold rounded-lg transition-all ${lang === "en" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500"}`}
-                >
-                  English (EN)
-                </button>
-                <button 
-                  onClick={() => setLang("id")}
-                  className={`py-2 text-sm font-bold rounded-lg transition-all ${lang === "id" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500"}`}
-                >
-                  Indonesia (ID)
-                </button>
+                <button onClick={() => setLang("en")} className={`py-1.5 text-xs font-bold rounded-lg ${lang === "en" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500"}`}>English</button>
+                <button onClick={() => setLang("id")} className={`py-1.5 text-xs font-bold rounded-lg ${lang === "id" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500"}`}>Indonesia</button>
               </div>
             </div>
 
-            {/* Custom Prompt Ingestion Interface */}
-            <div className="border-t pt-4">
-              <label className="text-xs uppercase font-extrabold tracking-wider text-zinc-400 block mb-2">
-                {lang === "en" ? "Append Custom Cards" : "Tambah Pertanyaan Kustom"}
-              </label>
+            {/* Add New Question Section */}
+            <div className="border-t pt-3">
+              <label className="text-[11px] font-black uppercase text-zinc-400 block mb-1">Add Custom Question</label>
+              <select value={newQuestionLevel} onChange={(e) => setNewQuestionLevel(e.target.value)} className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 text-xs bg-white text-zinc-800 mb-2">
+                <option value="lvl1">Level 1</option>
+                <option value="lvl2">Level 2</option>
+                <option value="lvl3">Level 3</option>
+              </select>
+              <textarea rows={2} placeholder="Write card prompt..." value={newQuestionText} onChange={(e) => setNewQuestionText(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs bg-white text-zinc-800 mb-2 focus:outline-none" />
+              <button onClick={appendQuestion} className="w-full bg-zinc-900 text-white text-xs font-bold py-2 rounded-xl">Add to Stack</button>
+            </div>
+
+            {/* Editable Questions List */}
+            <div className="border-t pt-3">
+              <label className="text-[11px] font-black uppercase text-zinc-400 block mb-2">Manage {newQuestionLevel.toUpperCase()} Questions</label>
               <div className="space-y-2">
-                <select 
-                  value={newQuestionLevel}
-                  onChange={(e) => setNewQuestionLevel(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-sm bg-white text-zinc-800"
-                >
-                  <option value="lvl1">{lang === "en" ? "Level 1: Surface Icebreakers" : "Level 1: Ringan"}</option>
-                  <option value="lvl2">{lang === "en" ? "Level 2: Deep Dive" : "Level 2: Mendalam"}</option>
-                  <option value="lvl3">{lang === "en" ? "Level 3: Absolute Plunge" : "Level 3: Sangat Intim"}</option>
-                </select>
-                <textarea 
-                  rows={2}
-                  placeholder={lang === "en" ? "Write a compelling question..." : "Tulis pertanyaan baru..."}
-                  value={newQuestionText}
-                  onChange={(e) => setNewQuestionText(e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-800 text-sm bg-white text-zinc-800"
-                />
-                <button 
-                  onClick={addCustomQuestion}
-                  className="w-full bg-zinc-900 text-white text-sm font-bold py-2 rounded-xl hover:bg-zinc-800 transition"
-                >
-                  {lang === "en" ? "Add to Deck Stack" : "Masukkan ke Tumpukan"}
-                </button>
-              </div>
-            </div>
+                {customQuestions[lang][newQuestionLevel].map((q, idx) => (
+                  <div key={idx} className="flex flex-col gap-2 bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                    {editingQuestionIndex === idx ? (
+                      <textarea
+                        value={editQuestionValue}
+                        onChange={(e) => setEditQuestionValue(e.target.value)}
+                        className="w-full p-2 text-xs border rounded-lg bg-white"
+                      />
+                    ) : (
+                      <p className="text-xs text-zinc-700 font-medium">{q}</p>
+                    )}
 
-            {/* Live Prompt Verification Management Matrix */}
-            <div className="border-t pt-4">
-              <label className="text-xs uppercase font-extrabold tracking-wider text-zinc-400 block mb-3">
-                {lang === "en" ? "Active Prompt Inventories" : "Daftar Pertanyaan Aktif"}
-              </label>
-              
-              {["lvl1", "lvl2", "lvl3"].map((lvl) => (
-                <div key={lvl} className="mb-4">
-                  <h4 className="text-xs font-bold text-zinc-600 uppercase tracking-tight mb-2">
-                    {lvl.toUpperCase()} ({customQuestions[lang][lvl].length})
-                  </h4>
-                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto bg-zinc-50 p-2 rounded-xl border border-zinc-200">
-                    {customQuestions[lang][lvl].map((q, idx) => (
-                      <div key={idx} className="flex justify-between items-start gap-2 text-xs bg-white p-2 rounded-lg border border-zinc-100 shadow-sm">
-                        <p className="text-zinc-700 flex-1">{q}</p>
-                        <button 
-                          onClick={() => removeCustomQuestion(lvl, idx)}
-                          className="text-zinc-300 hover:text-red-500 flex-shrink-0"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
+                    <div className="flex justify-end gap-2">
+                      {editingQuestionIndex === idx ? (
+                        <button
+                          onClick={() => {
+                            const updated = [...customQuestions[lang][newQuestionLevel]];
+                            updated[idx] = editQuestionValue;
+                            setCustomQuestions({ ...customQuestions, [lang]: { ...customQuestions[lang], [newQuestionLevel]: updated } });
+                            setEditingQuestionIndex(null);
+                          }}
+                          className="text-emerald-600 font-bold text-[10px]"
+                        >Save</button>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingQuestionIndex(idx); setEditQuestionValue(q); }}
+                          className="text-zinc-400 hover:text-zinc-800 text-[10px]"
+                        >Edit</button>
+                      )}
+                      <button
+                        onClick={() => {
+                          const updated = customQuestions[lang][newQuestionLevel].filter((_, i) => i !== idx);
+                          setCustomQuestions({ ...customQuestions, [lang]: { ...customQuestions[lang], [newQuestionLevel]: updated } });
+                        }}
+                        className="text-red-400 hover:text-red-600 text-[10px]"
+                      >Delete</button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </main>
+
+          <button onClick={() => setView("game")} className="w-full bg-zinc-900 text-white font-bold py-3 rounded-xl mt-4">Save Changes</button>
+        </div>
       )}
 
     </div>

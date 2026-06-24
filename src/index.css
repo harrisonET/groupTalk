@@ -1,12 +1,28 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* Force Tailwind v4 to look inside your src folder */
+/* Point Tailwind v4 directly to your source files */
 @source "../src";
 
-body {
+/* Global layout resetting to prevent browser stretching */
+html, body, #root {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100% !important;
+  min-height: 100vh;
   background-color: #121212;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Fix Tailwind v4 button default resetting issue */
+button {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
 }
