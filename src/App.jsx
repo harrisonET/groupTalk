@@ -16,8 +16,8 @@ const WaveVector = ({ lines }) => (
 );
 
 export default function App() {
-  const [view, setView] = useState("game"); // 'game' | 'players' | 'settings'
-  const [players, setPlayers] = useState(["Player 1", "Player 2", "Alex", "Bianca"]);
+  const [view, setView] = useState("players"); // 'game' | 'players' | 'settings'
+  const [players, setPlayers] = useState(["Player 1", "Player 2", "Player 3", "Player 4", "Player 5"]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [lang, setLang] = useState("en");
   
@@ -37,6 +37,7 @@ export default function App() {
   const [playerAsking, setPlayerAsking] = useState("");
   const [playerTarget, setPlayerTarget] = useState("");
   const [currentQuestion, setCurrentQuestion] = useState("");
+  const [askerIndex, setAskerIndex] = useState(0);
   
   const [usedQuestions, setUsedQuestions] = useState({
     en: { lvl1: [], lvl2: [], lvl3: [] },
@@ -50,9 +51,22 @@ export default function App() {
     lvl3: { bg: "bg-[#bca0dc]", text: "text-[#391e54]", cardText: "text-[#bca0dc]" }
   };
 
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   useEffect(() => {
     if (players.length >= 2) {
-      rotateTurn(null);
+      //setPlayers((prevPlayers) => shuffleArray(prevPlayers));
+      // Start at index 0, target at 1
+      setAskerIndex(0);
+      setPlayerAsking(players[0]);
+      setPlayerTarget(players[1]);
     }
   }, [players]);
 
@@ -60,19 +74,34 @@ export default function App() {
     getNewQuestion(currentLevel);
   }, [currentLevel, lang, customQuestions]);
 
-  const rotateTurn = (nextAsker = null) => {
+  const rotateTurn = (manualAsker = null) => {
     if (players.length < 2) return;
-    let asker = nextAsker && players.includes(nextAsker) ? nextAsker : players[Math.floor(Math.random() * players.length)];
-    const filterPool = players.filter(p => p !== asker);
-    const target = filterPool[Math.floor(Math.random() * filterPool.length)];
-    
-    setPlayerAsking(asker);
-    setPlayerTarget(target);
+
+    // If a manual asker is provided, find their index; otherwise, increment
+    let nextAskerIndex;
+    if (manualAsker && players.includes(manualAsker)) {
+      nextAskerIndex = players.indexOf(manualAsker);
+    } else {
+      // Increment the index and wrap around to 0 if at the end of the array
+      nextAskerIndex = (askerIndex + 1) % players.length;
+    }
+
+    // The target is always the next person in line
+    const nextTargetIndex = (nextAskerIndex + 1) % players.length;
+
+    setAskerIndex(nextAskerIndex);
+    setPlayerAsking(players[nextAskerIndex]);
+    setPlayerTarget(players[nextTargetIndex]);
   };
 
   const handlePlungeClick = () => {
     rotateTurn(playerTarget);
     getNewQuestion(currentLevel);
+  };
+
+  const startGame = () => {
+    setPlayers(shuffleArray(players));
+    setView("game");
   };
 
   const getNewQuestion = (level) => {
@@ -128,7 +157,7 @@ export default function App() {
       
       {/* GLOBAL VIEW TOP BAR NAVIGATION */}
       <header className="flex justify-between items-center w-full pb-2">
-        {view !== "game" ? (
+        {view !== "game" && view !== "players" ? (
           <button onClick={() => setView("game")} className="p-2 text-zinc-900 font-bold bg-white/20 rounded-full text-sm px-4">
             ← Back
           </button>
@@ -323,7 +352,7 @@ export default function App() {
             </div>
           </div>
 
-          <button onClick={() => setView("game")} className="w-full bg-zinc-900 text-white font-bold py-3 rounded-xl mt-4">
+          <button onClick={() => startGame()} className="w-full bg-zinc-900 text-white font-bold py-3 rounded-xl mt-4">
             <Play size={16} className="inline mr-1" /> Start Game
           </button>
         </div>
